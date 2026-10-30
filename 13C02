@@ -1,0 +1,139 @@
+
+#include <Servo.h>
+
+// Arduino pin assignment
+#define PIN_SERVO 10
+
+// Servo PWM settings
+#define _DUTY_MIN 1000
+#define _DUTY_NEU 1500
+#define _DUTY_MAX 2000
+
+// Servo speed (degree/sec)
+#define _SERVO_SPEED_FAST 3.0
+#define _SERVO_SPEED_SLOW 0.3
+
+// Control interval (msec)
+#define INTERVAL 20
+
+// Experiment duration (msec)
+#define _TIME_FAST 60000UL
+#define _TIME_SLOW 300000UL
+
+Servo myservo;
+
+// Global variables
+unsigned long start_time;
+unsigned long last_sampling_time;
+
+float target_angle = 180.0;
+int duty_curr = _DUTY_MAX;
+
+int experiment = 1;
+bool finished = false;
+
+// Convert angle to PWM duty
+float angleToDuty(float angle) {
+  if (angle <= 90.0) {
+    return _DUTY_MIN +
+      (_DUTY_NEU - _DUTY_MIN) * (angle / 90.0);
+  } else {
+    return _DUTY_NEU +
+      (_DUTY_MAX - _DUTY_NEU) *
+      ((angle - 90.0) / 90.0);
+  }
+}
+
+void setup() {
+  Serial.begin(57600);
+
+  myservo.attach(PIN_SERVO);
+
+  // Initial position: 180 degrees
+  myservo.writeMicroseconds(_DUTY_MAX);
+
+  // Wait for initial positioning
+  delay(2000);
+
+  start_time = millis();
+  last_sampling_time = start_time;
+
+  Serial.println("Experiment 1 START");
+  Serial.println("Speed: 3 deg/sec");
+}
+
+void loop() {
+  if (finished) {
+    return;
+  }
+
+  unsigned long time_curr = millis();
+
+  // Sampling interval
+  if (time_curr - last_sampling_time < INTERVAL) {
+    return;
+  }
+
+  last_sampling_time = time_curr;
+
+  unsigned long elapsed_ms = time_curr - start_time;
+
+  // Experiment 1: 180 -> 0 degrees (60 sec)
+  if (experiment == 1) {
+
+    if (elapsed_ms >= _TIME_FAST) {
+      target_angle = 0.0;
+    } else {
+      target_angle =
+        180.0 - _SERVO_SPEED_FAST *
+        (elapsed_ms / 1000.0);
+    }
+
+    duty_curr = (int)(angleToDuty(target_angle) + 0.5);
+    myservo.writeMicroseconds(duty_curr);
+
+    if (elapsed_ms >= _TIME_FAST) {
+      Serial.println("Experiment 1 FINISHED");
+
+      experiment = 2;
+      start_time = time_curr;
+
+      Serial.println("Experiment 2 START");
+      Serial.println("Speed: 0.3 deg/sec");
+    }
+  }
+
+  // Experiment 2: 0 -> 90 degrees (300 sec)
+  else if (experiment == 2) {
+
+    if (elapsed_ms >= _TIME_SLOW) {
+      target_angle = 90.0;
+    } else {
+      target_angle =
+        _SERVO_SPEED_SLOW *
+        (elapsed_ms / 1000.0);
+    }
+
+    duty_curr = (int)(angleToDuty(target_angle) + 0.5);
+    myservo.writeMicroseconds(duty_curr);
+
+    if (elapsed_ms >= _TIME_SLOW) {
+      finished = true;
+      Serial.println("Experiment 2 FINISHED");
+      Serial.println("ALL EXPERIMENTS COMPLETED");
+    }
+  }
+
+  // Serial output
+  Serial.print("Experiment: ");
+  Serial.print(experiment);
+
+  Serial.print(" | Time(ms): ");
+  Serial.print(elapsed_ms);
+
+  Serial.print(" | Angle: ");
+  Serial.print(target_angle, 2);
+
+  Serial.print(" | Duty: ");
+  Serial.println(duty_curr);
+}
